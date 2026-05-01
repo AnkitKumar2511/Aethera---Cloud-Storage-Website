@@ -261,6 +261,15 @@
     @apply aspect-square rounded-full !important;
   }
 
+  .auth-sidebar {
+    @apply hidden w-1/2 items-center justify-center p-10 lg:flex xl:w-2/5 !important;
+    background: linear-gradient(135deg, #6C5CE7 0%, #5341CD 50%, #4029BA 100%);
+  }
+  .auth-main {
+    @apply flex flex-1 flex-col items-center bg-white p-4 py-10 lg:justify-center lg:p-10 lg:py-0 !important;
+    background: #FCF8FF;
+  }
+
   /* AuthForm */
   .auth-form {
     @apply flex max-h-[800px] w-full max-w-[580px] flex-col justify-center space-y-6 transition-all lg:h-full lg:space-y-8 !important;
