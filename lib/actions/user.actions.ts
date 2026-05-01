@@ -95,7 +95,7 @@ export const verifySecret = async ({
       path: "/",
       httpOnly: true,
       sameSite: "strict",
-      secure: true,
+      secure: process.env.NODE_ENV === "production",
     });
 
     return parseStringify({ sessionId: session.$id });
@@ -120,6 +120,10 @@ export const getCurrentUser = async () => {
 
     return parseStringify(user.documents[0]);
   } catch (error) {
+    // Suppress console log for "No session" errors which are expected when not logged in
+    if (error instanceof Error && error.message === "No session") {
+      return null;
+    }
     console.log(error);
   }
 };

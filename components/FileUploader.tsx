@@ -20,6 +20,7 @@ interface Props {
 }
 
 interface UploadFileState {
+  id: string;
   file: File;
   progress: number;
   status: 'uploading' | 'completed' | 'error';
@@ -33,6 +34,7 @@ const FileUploader = ({ ownerId, accountId, className }: Props) => {
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
       const newFiles = acceptedFiles.map(file => ({
+        id: `${file.name}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         file,
         progress: 0,
         status: 'uploading' as const
@@ -40,9 +42,11 @@ const FileUploader = ({ ownerId, accountId, className }: Props) => {
       
       setUploadingFiles(prev => [...prev, ...newFiles]);
 
-      acceptedFiles.forEach(async (file) => {
+      newFiles.forEach(async (uploadState) => {
+        const { file, id } = uploadState;
+
         if (file.size > MAX_FILE_SIZE) {
-          setUploadingFiles(prev => prev.filter(f => f.file.name !== file.name));
+          setUploadingFiles(prev => prev.filter(f => f.id !== id));
           return toast({
             description: (
               <p className="body-2 text-white">
@@ -56,7 +60,10 @@ const FileUploader = ({ ownerId, accountId, className }: Props) => {
 
         try {
           // 1. Get JWT for secure client-side upload
-          const { jwt } = await createJWT();
+          const jwtResult = await createJWT();
+          const jwt = jwtResult?.jwt;
+
+          if (!jwt) throw new Error("No JWT found");
 
           // 2. Use XMLHttpRequest for exact progress tracking
           const xhr = new XMLHttpRequest();
@@ -68,7 +75,7 @@ const FileUploader = ({ ownerId, accountId, className }: Props) => {
             if (event.lengthComputable) {
               const percentComplete = Math.round((event.loaded / event.total) * 100);
               setUploadingFiles(prev => prev.map(f => 
-                f.file.name === file.name 
+                f.id === id 
                 ? { ...f, progress: percentComplete } 
                 : f
               ));
@@ -77,6 +84,11 @@ const FileUploader = ({ ownerId, accountId, className }: Props) => {
 
           xhr.onload = async () => {
             if (xhr.status >= 200 && xhr.status < 300) {
+              // Mark as 100% while processing database record
+              setUploadingFiles(prev => prev.map(f => 
+                f.id === id ? { ...f, progress: 100 } : f
+              ));
+
               const bucketFile = JSON.parse(xhr.response);
               
               // 3. Create database record
@@ -87,14 +99,16 @@ const FileUploader = ({ ownerId, accountId, className }: Props) => {
                 path,
               });
 
-              setUploadingFiles(prev => prev.filter(f => f.file.name !== file.name));
+              setUploadingFiles(prev => prev.filter(f => f.id !== id));
             } else {
               throw new Error('Upload failed');
             }
           };
 
           xhr.onerror = () => {
-            throw new Error('XHR error');
+            setUploadingFiles(prev => prev.map(f => 
+              f.id === id ? { ...f, status: 'error' } : f
+            ));
           };
 
           const url = `${appwriteConfig.endpointUrl}/storage/buckets/${appwriteConfig.bucketId}/files`;
@@ -106,7 +120,7 @@ const FileUploader = ({ ownerId, accountId, className }: Props) => {
         } catch (error) {
           console.error("Upload failed:", error);
           setUploadingFiles(prev => prev.map(f => 
-            f.file.name === file.name 
+            f.id === id 
             ? { ...f, status: 'error' } 
             : f
           ));
@@ -143,12 +157,12 @@ const FileUploader = ({ ownerId, accountId, className }: Props) => {
         <ul className="uploader-preview-list !z-[9999] bg-white border border-light-300 shadow-2xl rounded-[20px]">
           <h4 className="h4 text-light-100 p-4">Uploading</h4>
 
-          {uploadingFiles.map(({ file, progress, status }, index) => {
+          {uploadingFiles.map(({ file, progress, status, id }) => {
             const { type, extension } = getFileType(file.name);
 
             return (
               <li
-                key={`${file.name}-${index}`}
+                key={id}
                 className="uploader-preview-item"
               >
                 <div className="flex items-center gap-3">
@@ -163,7 +177,7 @@ const FileUploader = ({ ownerId, accountId, className }: Props) => {
                     {status === 'error' ? (
                       <p className="text-red caption">Upload failed</p>
                     ) : (
-                      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-light-400">
+                      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-light-400">
                         <div 
                           className="h-full bg-brand transition-all duration-300" 
                           style={{ width: `${progress}%` }}
@@ -179,7 +193,10 @@ const FileUploader = ({ ownerId, accountId, className }: Props) => {
                   height={24}
                   alt="Remove"
                   className="cursor-pointer"
-                  onClick={(e) => handleRemoveFile(e, file.name)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setUploadingFiles((prev) => prev.filter((f) => f.id !== id));
+                  }}
                 />
               </li>
             );

@@ -160,6 +160,9 @@ export const getFiles = async ({
     console.log({ files });
     return parseStringify(files);
   } catch (error) {
+    if (error instanceof Error && error.message === "User not found") {
+      return null;
+    }
     handleError(error, "Failed to get files");
   }
 };
@@ -280,6 +283,9 @@ export async function getTotalSpaceUsed() {
 
     return parseStringify(totalSpace);
   } catch (error) {
+    if (error instanceof Error && error.message === "No session") {
+      return null;
+    }
     handleError(error, "Error calculating total space used:, ");
   }
 }
